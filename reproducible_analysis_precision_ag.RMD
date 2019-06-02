@@ -1,0 +1,160 @@
+---
+title: "PAD Odissa"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    theme: yeti
+params:
+  datapath: "data/test_data.csv"
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+source("ReadDataApp.R")
+source("modified_thompson.R")
+#source("optimal_stopping.R")
+```
+
+```{r, message=F, echo=F, warning=F}
+k=6
+control_treatment=1
+treatment_names = c(
+  "no SMS, 10am",
+  "no SMS, 6:30pm",
+  "SMS 1h before, 10am",
+  "SMS 1h before, 6:30pm",
+  "SMS 24h before, 10am",
+  "SMS 24h before, 6:30 pm"
+)
+
+
+priordata=ReadDataApp(params$datapath)
+```
+
+# Summary statistics
+
+
+Column 1
+--------------------------------------------------
+
+
+
+### Number of observations 
+
+
+`r valueBox(length(priordata$Y))`
+
+### Success rate
+`r gauge(round(mean(priordata$Y), digits=2), min=0, max=1)`
+
+
+
+
+### Success rate by treatment
+
+```{r, message=F, echo=F, cache=F}
+by_treatment= as_tibble(priordata[c("Y","D")]) %>% 
+  group_by(D, .drop=FALSE) %>% 
+  summarise(avg=mean(Y), count=n(), successes=sum(Y)) %>% 
+  mutate(treatment=factor(treatment_names, levels=treatment_names))
+
+
+ggplot(by_treatment, aes(x=treatment, y=avg, color = treatment)) +
+    geom_point(size=5) +
+    scale_color_viridis_d() +
+    coord_flip() +
+    ylim(0, NA) +
+    theme_minimal()+
+    theme(legend.position = "none")
+```                    
+
+
+Column 2
+--------------------------------------------------
+
+
+
+### Past distribution across treatments
+
+```{r, message=F, echo=F, cache=F}
+ggplot(by_treatment, aes(x=treatment, y=count, fill=treatment)) +
+    geom_col() +
+    scale_fill_viridis_d() +
+    coord_flip() +
+    theme_minimal() +
+    theme(legend.position = "none")
+```
+
+
+
+### Current assignment probabilities
+
+```{r, echo=F}
+P_current = DtchoiceThompson_modified(
+  priordata$Y,
+  priordata$D,
+  priordata$k,
+  Nt = Nt,
+  return_probabilities = T
+)
+
+#knitr::kable(P_current, digits=2)
+P_current_tibble = tibble(share = as_vector(P_current),
+                          treatment = factor(treatment_names, levels = treatment_names))
+
+ggplot(P_current_tibble, aes(x = treatment, y = share, fill = treatment)) +
+  geom_col() +
+  scale_fill_viridis_d() +
+  coord_flip() +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+
+# Tables
+
+## Column 1
+
+### Tabulated data
+
+```{r}
+by_treatment %>% 
+  select(treatment, count, successes, avg) %>% 
+  knitr::kable(row.names=F,
+               col.names=c("Treatment", "Number of obervations", "Number of successes", "Share of successes"),
+               digits = c(NA,0,0,2))
+```
+
+## Column 2
+
+### Posterior parameters
+
+```{r}
+P_optimal = DtchoiceThompsonProbabilities(
+  priordata$Y,
+  priordata$D,
+  priordata$k
+) %>% as_vector
+
+by_treatment %>% 
+  mutate(alpha= 1 + successes,
+         beta= 1 + count-successes,
+         mean = alpha / (alpha+beta),
+         var = alpha * beta / ((alpha+beta)^2 * (alpha+beta +1)  ),
+         std = sqrt(var),
+         succ_proba = P_optimal) %>% 
+  select(treatment, mean, std, succ_proba) %>% 
+  knitr::kable(row.names=F,
+               col.names=c("Treatment", "Posterior mean", "Posterior standard deviation", "Posterior probability optimal"),
+               digits = c(NA,3,3,3))
+```
+
+# Source data
+
+
+
+`r read_csv(params$datapath) %>%
+  knitr::kable(row.names=F)`
+
