@@ -22,12 +22,13 @@ k=6
 control_treatment=1
 treatment_names = c(
   "no SMS, 10am",
-  "no SMS, 6:30pm",
   "SMS 1h before, 10am",
-  "SMS 1h before, 6:30pm",
   "SMS 24h before, 10am",
+  "no SMS, 6:30pm",
+  "SMS 1h before, 6:30pm",
   "SMS 24h before, 6:30 pm"
 )
+
 
 
 priordata=ReadDataApp(params$datapath)
@@ -54,7 +55,7 @@ Column 1
 
 ### Success rate by treatment
 
-```{r, message=F, echo=F, cache=F}
+```{r, message=F, echo=F, cache=F, fig.width=6, fig.height=3}
 by_treatment= as_tibble(priordata[c("Y","D")]) %>% 
   group_by(D, .drop=FALSE) %>% 
   summarise(avg=mean(Y), count=n(), successes=sum(Y)) %>% 
@@ -78,7 +79,7 @@ Column 2
 
 ### Past distribution across treatments
 
-```{r, message=F, echo=F, cache=F}
+```{r, message=F, echo=F, cache=F, fig.width=6, fig.height=3}
 ggplot(by_treatment, aes(x=treatment, y=count, fill=treatment)) +
     geom_col() +
     scale_fill_viridis_d() +
@@ -91,7 +92,7 @@ ggplot(by_treatment, aes(x=treatment, y=count, fill=treatment)) +
 
 ### Current assignment probabilities
 
-```{r, echo=F}
+```{r, echo=F, fig.width=6, fig.height=3}
 P_current = DtchoiceThompson_modified(
   priordata$Y,
   priordata$D,
