@@ -6,12 +6,13 @@ output:
     vertical_layout: fill
     theme: yeti
 params:
-  datapath: "data/test_data.csv"
+  datapath: "data/combined_outcomes.csv"
 ---
 
 ```{r setup, include=FALSE}
 library(flexdashboard)
 library(tidyverse)
+library(lubridate)
 source("ReadDataApp.R")
 source("modified_thompson.R")
 #source("optimal_stopping.R")
@@ -85,7 +86,10 @@ ggplot(by_treatment, aes(x=treatment, y=count, fill=treatment)) +
     scale_fill_viridis_d() +
     coord_flip() +
     theme_minimal() +
-    theme(legend.position = "none")
+    theme(legend.position = "none") +
+    labs(x="Treatment", y="Number of observations")
+
+ggsave("figures_for_export/assignment_shares.pdf", width=6, height=2)
 ```
 
 
@@ -114,6 +118,63 @@ ggplot(P_current_tibble, aes(x = treatment, y = share, fill = treatment)) +
 ```
 
 
+# Time series
+
+```{r}
+by_date= read_csv(params$datapath) %>% 
+    mutate(date=mdy(date),
+           treatment = factor(treatment, labels = treatment_names)) 
+
+frequency_series = by_date %>% 
+    group_by(date, treatment) %>% 
+    summarise(n=n()) 
+
+series_labels = frequency_series %>% 
+    filter(date==max(frequency_series$date))
+```
+
+
+### Success rate over time
+
+```{r, fig.width=10, fig.height=3}
+by_date %>% 
+    group_by(date) %>% 
+    summarise(avg=mean(outcome)) %>% 
+ggplot(aes(x=date, y=avg)) +
+    #geom_point() +
+    geom_line(size=2) +
+    scale_y_continuous(limits = c(0,.3), breaks=seq(0,.3,.05)) +
+    scale_x_date(limits=c(min(frequency_series$date),max(frequency_series$date)+3),
+                 breaks=ymd(unique(frequency_series$date)),
+                 date_labels = "%b %d") +
+    labs(x="Date", y="Success rate") +
+    theme_minimal()
+```
+
+### Assignment frequencies over time
+
+```{r, fig.width=10, fig.height=3 }
+
+
+frequency_series %>% 
+ggplot(aes(x=date, y=n, color=treatment)) +
+    #geom_point(size=3) +
+    geom_line(size=1) +
+    #ggrepel::geom_label_repel(data= series_labels, aes(y=n, label=treatment), direction="y", hjust=0, size=3) +
+    scale_y_continuous(limits = c(0,300), breaks=seq(0,300,50),
+                       sec.axis = dup_axis(name=NULL, breaks=series_labels$n, labels=series_labels$treatment)
+                       ) +
+    scale_x_date(limits=c(min(frequency_series$date),max(frequency_series$date)),expand=expand_scale(mult=0),
+                 breaks=ymd(unique(frequency_series$date)),
+                 date_labels = "%b %d") +
+    scale_color_viridis_d() +
+    labs(x="Date", y="Number of observations") +
+    theme_minimal() +
+    theme(legend.position = "none")
+
+ggsave("figures_for_export/assignment_shares_timeseries.pdf", width=8, height=3)
+```
+
 # Tables
 
 ## Column 1
@@ -121,11 +182,26 @@ ggplot(P_current_tibble, aes(x = treatment, y = share, fill = treatment)) +
 ### Tabulated data
 
 ```{r}
-by_treatment %>% 
-  select(treatment, count, successes, avg) %>% 
-  knitr::kable(row.names=F,
-               col.names=c("Treatment", "Number of obervations", "Number of successes", "Share of successes"),
-               digits = c(NA,0,0,2))
+tabulation=by_treatment %>% 
+  select(treatment, count, successes, avg)
+colnames(tabulation)=c("Treatment", "Obervations", "Successes", "Share of successes")
+
+tabulation %>% 
+  knitr::kable(row.names=F, digits = c(NA,0,0,2))
+
+print(
+    xtable::xtable(
+        tabulation,
+        type = "latex",
+        caption = "Tabulated data",
+        label = paste("tab:tabulated"),
+        digits = c(NA, NA, 0, 0, 2),
+    ),
+    file = "./figures_for_export/tabulated_PAD.tex",
+    caption.placement = "top",
+    latex.environments = "center",
+    include.rownames = FALSE,
+)    
 ```
 
 ## Column 2
@@ -139,17 +215,33 @@ P_optimal = DtchoiceThompsonProbabilities(
   priordata$k
 ) %>% as_vector
 
-by_treatment %>% 
+Bayes_table=by_treatment %>% 
   mutate(alpha= 1 + successes,
          beta= 1 + count-successes,
          mean = alpha / (alpha+beta),
          var = alpha * beta / ((alpha+beta)^2 * (alpha+beta +1)  ),
          std = sqrt(var),
          succ_proba = P_optimal) %>% 
-  select(treatment, mean, std, succ_proba) %>% 
-  knitr::kable(row.names=F,
-               col.names=c("Treatment", "Posterior mean", "Posterior standard deviation", "Posterior probability optimal"),
-               digits = c(NA,3,3,3))
+  select(treatment, mean, std, succ_proba) 
+
+colnames(Bayes_table)=c("Treatment", "Mean", "Standard dev", "Probability optimal")
+
+Bayes_table %>% 
+  knitr::kable(row.names=F, digits = c(NA,3,3,3))
+
+print(
+    xtable::xtable(
+        Bayes_table,
+        type = "latex",
+        caption = "Posterior parameters",
+        label = paste("tab:posterior"),
+        digits = c(NA, NA, 3,3,3)
+    ),
+    file = "./figures_for_export/posterior_PAD.tex",
+    caption.placement = "top",
+    latex.environments = "center",
+    include.rownames = FALSE,
+)    
 ```
 
 # Source data
