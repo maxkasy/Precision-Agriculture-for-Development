@@ -172,7 +172,7 @@ ggplot(aes(x=date, y=n, color=treatment)) +
     theme_minimal() +
     theme(legend.position = "none")
 
-ggsave("figures_for_export/assignment_shares_timeseries.pdf", width=8, height=3)
+ggsave("figures_for_export/assignment_shares_timeseries.pdf", width=8, height=4)
 ```
 
 # Tables
@@ -187,7 +187,7 @@ tabulation=by_treatment %>%
 colnames(tabulation)=c("Treatment", "Obervations", "Successes", "Share of successes")
 
 tabulation %>% 
-  knitr::kable(row.names=F, digits = c(NA,0,0,2))
+  knitr::kable(row.names=F, digits = c(NA,0,0,3))
 
 print(
     xtable::xtable(
@@ -195,7 +195,7 @@ print(
         type = "latex",
         caption = "Tabulated data",
         label = paste("tab:tabulated"),
-        digits = c(NA, NA, 0, 0, 2),
+        digits = c(NA, NA, 0, 0, 3),
     ),
     file = "./figures_for_export/tabulated_PAD.tex",
     caption.placement = "top",
